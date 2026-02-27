@@ -1,63 +1,96 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
-	"sync"
+
+  "github.com/lib/pq"
 )
 
 type CustomerStore struct {
-  mu sync.RWMutex
-  customers map[string]Customer
+  db *sql.DB
 }
 
 var ErrCustomerExists = errors.New("customer already exists")
 
-func NewCustomerStore() *CustomerStore {
+func NewCustomerStore(db *sql.DB) *CustomerStore {
   return &CustomerStore{
-    customers: make(map[string]Customer),
+    db: db,
   }
 }
 
-func (s *CustomerStore) GetAll() []Customer {
-  s.mu.RLock()
-  defer s.mu.RUnlock()
+func (s *CustomerStore) GetAll() ([]Customer, error) {
+  query := `SELECT id, name FROM  customers`
 
-  result := make([]Customer, 0, len(s.customers))
-  for _, c := range s.customers {
-    result = append(result, c)
+  rows, err := s.db.Query(query)
+  if err != nil {
+    return nil, err
+  }
+  defer rows.Close()
+
+  customers := []Customer{}
+  for rows.Next() {
+    var c Customer
+    if err := rows.Scan(&c.ID, &c.Name); err != nil {
+      return nil, err
+    }
+    customers = append(customers, c)
   }
 
-  return result
+  return customers, nil
 }
 
-func (s *CustomerStore) GetByID(id string) (Customer, bool) {
-  s.mu.RLock()
-  defer s.mu.RUnlock()
+func (s *CustomerStore) GetByID(id string) (Customer, error) {
+  query := `SELECT id, name FROM customers WHERE id=$1`
 
-  c, ok := s.customers[id]
-  return c, ok
+
+  var c Customer
+  err := s.db.QueryRow(query, id).Scan(&c.ID, &c.Name)
+
+  if err != nil {
+    return Customer{}, err
+  }
+
+  return c, nil
 }
 
 func (s *CustomerStore) Create(c Customer) error {
-  s.mu.Lock()
-  defer s.mu.Unlock()
+  query := `
+  INSERT INTO customers (id, name)
+  VALUES ($1, $2)
+  `
 
-  if _, ok := s.customers[c.ID]; ok {
-    return ErrCustomerExists
+  _, err := s.db.Exec(query, c.ID, c.Name)
+
+  if err != nil {
+    if pqErr, ok := err.(*pq.Error); ok {
+      if pqErr.Code == "23505" {
+        return ErrCustomerExists
+      }
+    }
+
+    return err
   }
 
-  s.customers[c.ID] = c
   return nil
 }
 
-func (s *CustomerStore) Delete(id string) bool {
-  s.mu.Lock()
-  defer s.mu.Unlock()
+func (s *CustomerStore) Delete(id string) error {
+  query := `DELETE FROM customers WHERE id=$1`
 
-  if _, ok := s.customers[id]; !ok {
-    return false
+  result, err := s.db.Exec(query, id)
+  if err != nil {
+    return err
   }
 
-  delete(s.customers, id)
-  return true
+  rowsAffected, err := result.RowsAffected()
+  if err != nil {
+    return err
+  }
+
+  if rowsAffected == 0 {
+    return sql.ErrNoRows
+  }
+
+  return nil
 }

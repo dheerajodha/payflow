@@ -8,7 +8,8 @@ import (
 )
 
 func main() {
-  store := NewCustomerStore()
+  db := NewDB()
+  store := NewCustomerStore(db)
 
   handler := NewHandler(store)
 

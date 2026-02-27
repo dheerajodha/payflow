@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -19,7 +20,14 @@ func NewHandler(store *CustomerStore) *Handler {
 func (h *Handler) GetCustomers(w http.ResponseWriter, r *http.Request) {
   w.Header().Set("Content-Type", "application/json")
 
-  customers := h.store.GetAll()
+  customers, err := h.store.GetAll()
+  if err != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    json.NewEncoder(w).Encode(map[string]string{
+      "error": err.Error(),
+    })
+    return
+  }
 
   json.NewEncoder(w).Encode(customers)
 }
@@ -29,9 +37,8 @@ func (h *Handler) GetCustomer(w http.ResponseWriter, r *http.Request) {
 
   id := mux.Vars(r)["id"]
 
-  customer, ok := h.store.GetByID(id)
-
-  if !ok {
+  customer, err := h.store.GetByID(id)
+  if errors.Is(err, sql.ErrNoRows) {
     w.WriteHeader(http.StatusNotFound)
     return
   }
@@ -59,15 +66,11 @@ func (h *Handler) CreateCustomer(w http.ResponseWriter, r *http.Request) {
   err = h.store.Create(c)
 
   if err != nil {
-    if errors.Is(err, ErrCustomerExists) {
-      w.WriteHeader(http.StatusConflict)
-      json.NewEncoder(w).Encode(map[string]string{
-        "error": err.Error(),
-      })
-      return
-    }
+    w.WriteHeader(http.StatusConflict)
+    json.NewEncoder(w).Encode(map[string]string{
+      "error": err.Error(),
+    })
 
-    w.WriteHeader(http.StatusInternalServerError)
     return
   }
 
@@ -78,9 +81,9 @@ func (h *Handler) CreateCustomer(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteCustomer(w http.ResponseWriter, r *http.Request) {
   id := mux.Vars(r)["id"]
 
-  ok := h.store.Delete(id)
+  err := h.store.Delete(id)
 
-  if !ok {
+  if errors.Is(err, sql.ErrNoRows) {
     w.WriteHeader(http.StatusNotFound)
     return
   }
