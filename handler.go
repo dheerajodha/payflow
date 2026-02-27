@@ -69,11 +69,16 @@ func (h *Handler) CreateCustomer(w http.ResponseWriter, r *http.Request) {
   err = h.store.Create(c)
 
   if err != nil {
-    w.WriteHeader(http.StatusConflict)
-    json.NewEncoder(w).Encode(map[string]string{
-      "error": err.Error(),
-    })
+    if errors.Is(err, ErrCustomerExists) {
+      w.WriteHeader(http.StatusConflict)
+      json.NewEncoder(w).Encode(map[string]string{
+        "error": err.Error(),
+      })
 
+      return
+    }
+
+    w.WriteHeader(http.StatusInternalServerError)
     return
   }
 
