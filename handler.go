@@ -51,22 +51,35 @@ func (h *Handler) CreateCustomer(w http.ResponseWriter, r *http.Request) {
 
   w.Header().Set("Content-Type", "application/json")
 
-  var c Customer
+  type CreateCustomerRequest struct {
+    Name string `json:"name"`
+  }
 
-  err := json.NewDecoder(r.Body).Decode(&c)
+  var req CreateCustomerRequest
+
+  err := json.NewDecoder(r.Body).Decode(&req)
   if err != nil {
     w.WriteHeader(http.StatusBadRequest)
+    json.NewEncoder(w).Encode(map[string]string{
+      "error": "invalid JSON",
+    })
     return
   }
 
-  if c.Name == "" {
+  if req.Name == "" {
     w.WriteHeader(http.StatusBadRequest)
+    json.NewEncoder(w).Encode(map[string]string{
+      "error": "name is required",
+    })
     return
   }
 
-  c.ID = generateID("cust")
+  customer := Customer {
+    ID: generateID("cust"),
+    Name: req.Name,
+  }
 
-  err = h.store.Create(c)
+  err = h.store.Create(customer)
 
   if err != nil {
     if errors.Is(err, ErrCustomerExists) {
@@ -83,7 +96,7 @@ func (h *Handler) CreateCustomer(w http.ResponseWriter, r *http.Request) {
   }
 
   w.WriteHeader(http.StatusCreated)
-  json.NewEncoder(w).Encode(c)
+  json.NewEncoder(w).Encode(customer)
 }
 
 func (h *Handler) DeleteCustomer(w http.ResponseWriter, r *http.Request) {
