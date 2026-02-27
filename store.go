@@ -122,6 +122,7 @@ func (s *CustomerStore) ConfirmPaymentIntent(id string) (PaymentIntent, error) {
 
   defer tx.Rollback()
 
+  // Step 1: lock row
   query := `
   SELECT id, customer_id, amount, currency, status
   FROM payment_intents
@@ -147,6 +148,7 @@ func (s *CustomerStore) ConfirmPaymentIntent(id string) (PaymentIntent, error) {
     return PaymentIntent{}, errors.New("already confirmed")
   }
 
+  // Step 2: update payment_intent status to succeeded
   updateQuery := `
   UPDATE payment_intents
   SET status='succeeded'
@@ -159,12 +161,45 @@ func (s *CustomerStore) ConfirmPaymentIntent(id string) (PaymentIntent, error) {
     return PaymentIntent{}, err
   }
 
-  pi.Status = "succeeded"
+  // Step 3: insert ledger entries
+  customerEntry := generateID("le")
+  platformEntry := generateID("le")
 
+  _, err = tx.Exec(
+    `INSERT INTO ledger_entries
+    (id, payment_intent_id, account, amount)
+    VALUES ($1, $2, $3, $4)`,
+    customerEntry,
+    id,
+    "customer",
+    -pi.Amount,
+  )
+
+  if err != nil {
+    return PaymentIntent{}, err
+  }
+
+  _, err = tx.Exec(
+    `INSERT INTO ledger_entries
+    (id, payment_intent_id, account, amount)
+    VALUES ($1, $2, $3, $4)`,
+    platformEntry,
+    id,
+    "platform",
+    pi.Amount,
+  )
+
+  if err != nil {
+    return PaymentIntent{}, err
+  }
+
+  // Step 4: commit transaction
   err = tx.Commit()
   if err != nil {
     return PaymentIntent{}, err
   }
+
+  pi.Status = "succeeded"
 
   return pi, nil
 }
