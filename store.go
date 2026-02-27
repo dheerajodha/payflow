@@ -113,3 +113,58 @@ func (s *CustomerStore) CreatePaymentIntent(pi PaymentIntent) error {
 
   return err
 }
+
+func (s *CustomerStore) ConfirmPaymentIntent(id string) (PaymentIntent, error) {
+  tx, err := s.db.Begin()
+  if err != nil {
+    return PaymentIntent{}, err
+  }
+
+  defer tx.Rollback()
+
+  query := `
+  SELECT id, customer_id, amount, currency, status
+  FROM payment_intents
+  WHERE id=$1
+  FOR UPDATE
+  `
+
+  var pi PaymentIntent
+
+  err = tx.QueryRow(query, id).Scan(
+    &pi.ID,
+    &pi.CustomerID,
+    &pi.Amount,
+    &pi.Currency,
+    &pi.Status,
+  )
+
+  if err != nil {
+    return PaymentIntent{}, err
+  }
+
+  if pi.Status != "requires_confirmation" {
+    return PaymentIntent{}, errors.New("already confirmed")
+  }
+
+  updateQuery := `
+  UPDATE payment_intents
+  SET status='succeeded'
+  WHERE id=$1
+  `
+
+  _, err = tx.Exec(updateQuery, id)
+
+  if err != nil {
+    return PaymentIntent{}, err
+  }
+
+  pi.Status = "succeeded"
+
+  err = tx.Commit()
+  if err != nil {
+    return PaymentIntent{}, err
+  }
+
+  return pi, nil
+}

@@ -152,3 +152,26 @@ func (h *Handler) CreatePaymentIntent(w http.ResponseWriter, r *http.Request) {
   w.WriteHeader(http.StatusCreated)
   json.NewEncoder(w).Encode(pi)
 }
+
+func (h *Handler) ConfirmPaymentIntent(w http.ResponseWriter, r *http.Request) {
+  w.Header().Set("Content-Type", "application/json")
+
+  id := mux.Vars(r)["id"]
+
+  pi, err := h.store.ConfirmPaymentIntent(id)
+
+  if err != nil {
+    if err.Error() == "already confirmed" {
+      w.WriteHeader(http.StatusConflict)
+      json.NewEncoder(w).Encode(map[string]string{
+        "error": "payment intent already confirmed",
+      })
+      return
+    }
+
+    w.WriteHeader(http.StatusInternalServerError)
+    return
+  }
+
+  json.NewEncoder(w).Encode(pi)
+}

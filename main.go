@@ -20,6 +20,7 @@ func main() {
   r.HandleFunc("/customers", handler.CreateCustomer).Methods("POST")
   r.HandleFunc("/customers/{id}", handler.DeleteCustomer).Methods("DELETE")
   r.HandleFunc("/payment_intents", handler.CreatePaymentIntent).Methods("POST")
+  r.HandleFunc("/payment_intents/{id}/confirm", handler.ConfirmPaymentIntent).Methods("POST")
 
   log.Println("Server started on :8080")
 
