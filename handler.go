@@ -116,6 +116,13 @@ func (h *Handler) CreatePaymentIntent(w http.ResponseWriter, r *http.Request) {
   w.Header().Set("Content-Type", "application/json")
   defer r.Body.Close()
 
+  key := r.Header.Get("Idempotency-Key")
+
+  if key == "" {
+    w.WriteHeader(http.StatusBadRequest)
+    return
+  }
+
   type request struct {
     CustomerID string `json:"customer_id"`
     Amount     int64 `json:"amount"`
@@ -143,7 +150,7 @@ func (h *Handler) CreatePaymentIntent(w http.ResponseWriter, r *http.Request) {
     Status: "requires_confirmation",
   }
 
-  err = h.store.CreatePaymentIntent(pi)
+  pi, err = h.store.CreatePaymentIntentWithIdempotency(key, pi)
   if err != nil {
     w.WriteHeader(http.StatusInternalServerError)
     return

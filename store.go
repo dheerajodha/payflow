@@ -168,3 +168,75 @@ func (s *CustomerStore) ConfirmPaymentIntent(id string) (PaymentIntent, error) {
 
   return pi, nil
 }
+
+func (s *CustomerStore) CreatePaymentIntentWithIdempotency(key string, pi PaymentIntent) (PaymentIntent, error) {
+  tx, err := s.db.Begin()
+  if err != nil {
+    return PaymentIntent{}, err
+  }
+  defer tx.Rollback()
+
+  // Step 1: Check if the key exists
+  var existingPIID string
+
+  err = tx.QueryRow(
+    "SELECT payment_intent_id from idempotency_keys WHERE key=$1",
+    key,
+  ).Scan(&existingPIID)
+
+  if err == nil {
+    // key exists -> return the existing payment intent
+    var existingPI PaymentIntent
+
+    err = tx.QueryRow("SELECT id, customer_id, amount, currency, status FROM payment_intents WHERE id=$1", existingPIID).Scan(
+      &existingPI.ID,
+      &existingPI.CustomerID,
+      &existingPI.Amount,
+      &existingPI.Currency,
+      &existingPI.Status,
+    )
+
+    if err != nil {
+      return PaymentIntent{}, err
+    }
+
+    return existingPI, nil
+  }
+
+  // Step 2: create new payment intent
+
+  _, err = tx.Exec(
+    `INSERT INTO payment_intents
+    (id, customer_id, amount, currency, status)
+    VALUES ($1, $2, $3, $4, $5)`,
+    pi.ID,
+    pi.CustomerID,
+    pi.Amount,
+    pi.Currency,
+    pi.Status,
+  )
+
+  if err != nil {
+    return PaymentIntent{}, err
+  }
+
+  // Store 3: store idempotency key
+
+  _, err = tx.Exec(
+    `INSERT INTO idempotency_keys (key, payment_intent_id)
+    VALUES ($1, $2)`,
+    key,
+    pi.ID,
+  )
+
+  if err != nil {
+    return PaymentIntent{}, err
+  }
+
+  err = tx.Commit()
+  if err != nil {
+    return PaymentIntent{}, err
+  }
+
+  return pi, nil
+}
