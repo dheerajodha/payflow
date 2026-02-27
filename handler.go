@@ -111,3 +111,44 @@ func (h *Handler) DeleteCustomer(w http.ResponseWriter, r *http.Request) {
 
   w.WriteHeader(http.StatusNoContent)
 }
+
+func (h *Handler) CreatePaymentIntent(w http.ResponseWriter, r *http.Request) {
+  w.Header().Set("Content-Type", "application/json")
+  defer r.Body.Close()
+
+  type request struct {
+    CustomerID string `json:"customer_id"`
+    Amount     int64 `json:"amount"`
+    Currency   string `json:"currency"`
+  }
+
+  var req request
+
+  err := json.NewDecoder(r.Body).Decode(&req)
+  if err != nil {
+    w.WriteHeader(http.StatusBadRequest)
+    return
+  }
+
+  if req.CustomerID == "" || req.Amount <= 0 || req.Currency == "" {
+    w.WriteHeader(http.StatusBadRequest)
+    return
+  }
+
+  pi := PaymentIntent {
+    ID: generateID("pi"),
+    CustomerID: req.CustomerID,
+    Amount: req.Amount,
+    Currency: req.Currency,
+    Status: "requires_confirmation",
+  }
+
+  err = h.store.CreatePaymentIntent(pi)
+  if err != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    return
+  }
+
+  w.WriteHeader(http.StatusCreated)
+  json.NewEncoder(w).Encode(pi)
+}

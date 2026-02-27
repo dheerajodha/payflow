@@ -94,3 +94,22 @@ func (s *CustomerStore) Delete(id string) error {
 
   return nil
 }
+
+func (s *CustomerStore) CreatePaymentIntent(pi PaymentIntent) error {
+  query := `
+  INSERT INTO payment_intents
+  (id, customer_id, amount, currency, status)
+  VALUES ($1, $2, $3, $4, $5)
+  `
+
+  _, err := s.db.Exec(
+    query,
+    pi.ID,
+    pi.CustomerID,
+    pi.Amount,
+    pi.Currency,
+    pi.Status,
+  )
+
+  return err
+}
