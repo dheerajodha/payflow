@@ -1,11 +1,16 @@
 package main
 
-import "sync"
+import (
+	"errors"
+	"sync"
+)
 
 type CustomerStore struct {
   mu sync.RWMutex
   customers map[string]Customer
 }
+
+var ErrCustomerExists = errors.New("customer already exists")
 
 func NewCustomerStore() *CustomerStore {
   return &CustomerStore{
@@ -33,11 +38,16 @@ func (s *CustomerStore) GetByID(id string) (Customer, bool) {
   return c, ok
 }
 
-func (s *CustomerStore) Create(c Customer) {
+func (s *CustomerStore) Create(c Customer) error {
   s.mu.Lock()
   defer s.mu.Unlock()
 
+  if _, ok := s.customers[c.ID]; ok {
+    return ErrCustomerExists
+  }
+
   s.customers[c.ID] = c
+  return nil
 }
 
 func (s *CustomerStore) Delete(id string) bool {

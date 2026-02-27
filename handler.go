@@ -1,10 +1,11 @@
 package main
 
 import (
-  "encoding/json"
-  "net/http"
+	"encoding/json"
+	"errors"
+	"net/http"
 
-  "github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 )
 
 type Handler struct {
@@ -44,6 +45,7 @@ func (h *Handler) CreateCustomer(w http.ResponseWriter, r *http.Request) {
   var c Customer
 
   err := json.NewDecoder(r.Body).Decode(&c)
+  defer  r.Body.Close()
   if err != nil {
     w.WriteHeader(http.StatusBadRequest)
     return
@@ -54,7 +56,20 @@ func (h *Handler) CreateCustomer(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  h.store.Create(c)
+  err = h.store.Create(c)
+
+  if err != nil {
+    if errors.Is(err, ErrCustomerExists) {
+      w.WriteHeader(http.StatusConflict)
+      json.NewEncoder(w).Encode(map[string]string{
+        "error": err.Error(),
+      })
+      return
+    }
+
+    w.WriteHeader(http.StatusInternalServerError)
+    return
+  }
 
   w.WriteHeader(http.StatusCreated)
   json.NewEncoder(w).Encode(c)
