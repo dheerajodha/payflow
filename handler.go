@@ -58,10 +58,12 @@ func (h *Handler) CreateCustomer(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  if c.ID == "" || c.Name == "" {
+  if c.Name == "" {
     w.WriteHeader(http.StatusBadRequest)
     return
   }
+
+  c.ID = generateID("cust")
 
   err = h.store.Create(c)
 
