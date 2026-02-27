@@ -47,12 +47,13 @@ func (h *Handler) GetCustomer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateCustomer(w http.ResponseWriter, r *http.Request) {
+  defer  r.Body.Close()
+
   w.Header().Set("Content-Type", "application/json")
 
   var c Customer
 
   err := json.NewDecoder(r.Body).Decode(&c)
-  defer  r.Body.Close()
   if err != nil {
     w.WriteHeader(http.StatusBadRequest)
     return
